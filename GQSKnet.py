@@ -72,7 +72,9 @@ class SKNet(nn.Module):
         self.layer1=self._make_layer(block,128,nums_block_list[0],stride=1)
         self.layer2=self._make_layer(block,256,nums_block_list[1],stride=2)
         self.layer3=self._make_layer(block,512,nums_block_list[2],stride=2)
+        '''
         self.layer4=self._make_layer(block,1024,nums_block_list[3],stride=2)
+        '''
         self.avgpool=nn.AdaptiveAvgPool2d(1)
         self.fc=nn.Linear(1024*block.expansion,nums_class)
         self.softmax=nn.Softmax(-1)
@@ -82,7 +84,9 @@ class SKNet(nn.Module):
         output=self.layer1(output)
         output=self.layer2(output)
         output=self.layer3(output)
+        '''
         output=self.layer4(output)
+        '''
         output=self.avgpool(output)
         output=output.squeeze(-1).squeeze(-1)
         output=self.fc(output)

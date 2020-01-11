@@ -5,6 +5,7 @@ import Dataset
 import torch
 import config
 import train
+from time import *
 
 ###################### main函数 ####################
 def main():
@@ -37,21 +38,33 @@ def main():
     data_train = Dataset.ImageDataset(train_file, train=True)
     data_loader_train = torch.utils.data.DataLoader(dataset=data_train, batch_size=train_batch_size, shuffle=True)
 
+
     ########### 获取验证数据loader ##########
     data_valid = Dataset.ImageDataset(valid_file, train=False)
-    data_loader_valid = torch.utils.data.DataLoader(dataset=data_valid, batch_size=valid_batch_size, shuffle=False)
+    data_loader_valid = torch.utils.data.DataLoader(dataset=data_valid, batch_size=valid_batch_size, shuffle=True)
+
 
     ########### 获取测试数据loader ##########
     data_test = Dataset.ImageDataset(test_file, train=False)
     data_loader_test = torch.utils.data.DataLoader(dataset=data_test, batch_size=test_batch_size, shuffle=False)
 
+
     ########### 训练和评价 ##########
-    train.train_and_test(num_epochs, learning_rate, class_size, data_loader_train, data_loader_valid, data_loader_test,
-                         log_interval, version_name, pred_file).train_epoch()
+    trainer = train.train_and_test(num_epochs, learning_rate, class_size, data_loader_train, data_loader_valid, data_loader_test,
+                         log_interval, version_name, pred_file)
 
-    train.train_and_test(num_epochs, learning_rate, class_size, data_loader_train, data_loader_valid, data_loader_test,
-                         log_interval, version_name, pred_file).test()
 
+    ########## start train ###########
+    print("start train")
+    begin_time = time()
+    trainer.train_epoch()
+    end_time = time()
+    run_time = end_time - begin_time
+    print('cost time：', run_time)
+
+    ########## start eval ###########
+    print("start test")
+    trainer.test()
 
 if __name__ == "__main__":
     main()

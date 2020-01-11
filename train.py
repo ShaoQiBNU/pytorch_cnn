@@ -14,10 +14,16 @@ import GQResNeXt
 import GQSEResNet
 import GQSEResNeXt
 import GQSKnet
-import GQDensenet
+import GQSKResNeXt
+import GQSKResnet
 from torch.autograd import Variable
 import pandas as pd
-
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import classification_report
+from sklearn.metrics import cohen_kappa_score
+from sklearn.metrics import accuracy_score
+import os
+os.environ["CUDA_VISIBLE_DEVICES"]="3"
 
 ###################### train and test #######################
 class train_and_test():
@@ -41,29 +47,40 @@ class train_and_test():
     ################# train and test #################
     def train_epoch(self):
 
+        device = 'cpu'
+
         ########### model ###########
         #Model = model.GQNet()
-        Model = GQResnet.resnet18()
-        #Model = GQResNeXt.resnext50_32x4d()
+        #Model = GQResnet.resnet18()
+        #Model = GQResNeXt.resnext18()
         #Model = GQSEResNet.se_resnet_18()
-        #Model = GQSEResNeXt.se_resnext_50()
-        #Model = GQSKnet.SKNet50()
-        #Model = GQDensenet.densenet121()
+        Model = GQSEResNeXt.se_resnext_18()
+        #Model = GQSKResnet.SKNet18()
+        #Model = GQSKResNeXt.SKNet18()
+
+        total_model_parameters = sum(x.numel() for x in Model.parameters())
+        print("Model have %.2fM paramerters in total" % (total_model_parameters / 1e6))
+
+        print("SE_ResNeXt")
+
+        if torch.cuda.is_available():
+            print("pytorch gpu")
+            device = 'cuda'
+            Model = Model.cuda()
 
         ########### optimizer, loss ###########
-        optimizer = torch.optim.Adam(Model.parameters(), lr=self.learning_rate)
+        optimizer = torch.optim.Adam(Model.parameters(), lr=self.learning_rate, weight_decay=0.0001)
         loss = torch.nn.CrossEntropyLoss()
 
         ########### create trainer and evaluator ###########
-        trainer = create_supervised_trainer(
-            Model, optimizer, loss
-        )
+        trainer = create_supervised_trainer(Model, optimizer, loss, device=device)
 
         evaluator = create_supervised_evaluator(
             Model, metrics={
                 "accuracy": Accuracy(),
                 "loss": Loss(loss)
-            }
+            },
+            device=device
         )
 
         ########### log ###########
@@ -141,7 +158,7 @@ class train_and_test():
         for batch_idx, (data, target) in enumerate(self.data_loader_test):
 
             ############ get data and target ############
-            data, target = Variable(data), Variable(target)
+            data, target = Variable(data.cuda()), Variable(target.cuda())
 
             ############ get model output ############
             output = model(data)
@@ -158,9 +175,30 @@ class train_and_test():
 
             print("batch_index: {}, test correct: {:.2f}%".format(batch_idx + 1, 100 * test_correct / data.data.size()[0]))
 
-            print("Testing is over!")
+        print("Testing is over!")
 
         res = pd.DataFrame()
         res['pred'] = pred_res
         res['label'] = label_res
         res.to_csv(self.pred_file, index=False)
+
+        df = pd.read_csv(self.pred_file, sep=',')
+
+        # 混淆矩阵
+        print("confusion matrix")
+        cm = confusion_matrix(df['label'], df['pred'])
+        print(cm)
+
+        # 各类分类指标汇总
+        print("classification report")
+        cr = classification_report(df['label'], df['pred'], digits=4)
+        print(cr)
+
+        # kappa系数
+        print("kappa")
+        kappa = cohen_kappa_score(df['label'], df['pred'])
+        print(kappa)
+
+        # accuracy
+        print("accuracy")
+        print(accuracy_score(df['label'], df['pred']))

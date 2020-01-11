@@ -4,6 +4,53 @@
 import torch.nn as nn
 import math
 
+class BasicBlock(nn.Module):
+    expansion = 1
+
+    def __init__(self, inplanes, planes, stride=1, downsample=None, num_group=32):
+        super(BasicBlock, self).__init__()
+        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=3, bias=False, padding=1)
+        self.bn1 = nn.BatchNorm2d(planes)
+        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride,
+                               padding=1, bias=False, groups=num_group)
+        self.bn2 = nn.BatchNorm2d(planes)
+
+        self.relu = nn.ReLU(inplace=True)
+        self.downsample = downsample
+        self.stride = stride
+
+        self.globalAvgPool = nn.AdaptiveAvgPool2d((1, 1))
+        self.fc1 = nn.Linear(in_features=planes, out_features=round(planes / 16))
+        self.fc2 = nn.Linear(in_features=round(planes / 16), out_features=planes)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        residual = x
+
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+
+        out = self.conv2(out)
+        out = self.bn2(out)
+
+        if self.downsample is not None:
+            residual = self.downsample(x)
+
+        original_out = out
+        out = self.globalAvgPool(out)
+        out = out.view(out.size(0), -1)
+        out = self.fc1(out)
+        out = self.relu(out)
+        out = self.fc2(out)
+        out = self.sigmoid(out)
+        out = out.view(out.size(0), out.size(1), 1, 1)
+        out = out * original_out
+
+        out += residual
+        out = self.relu(out)
+
+        return out
 
 class Bottleneck(nn.Module):
     expansion = 4
@@ -69,12 +116,14 @@ class SE_ResNeXt(nn.Module):
         self.bn1 = nn.BatchNorm2d(self.inplanes)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        self.layer1 = self._make_layer(block, 128, layers[0], num_group)
+        self.layer1 = self._make_layer(block, 128, layers[0], num_group, stride=2)
         self.layer2 = self._make_layer(block, 256, layers[1], num_group, stride=2)
         self.layer3 = self._make_layer(block, 512, layers[2], num_group, stride=2)
+        '''
         self.layer4 = self._make_layer(block, 1024, layers[3], num_group, stride=2)
+        '''
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(1024 * block.expansion, num_classes)
+        self.fc = nn.Linear(512 * block.expansion, num_classes)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -110,13 +159,24 @@ class SE_ResNeXt(nn.Module):
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
+        '''
         x = self.layer4(x)
+        '''
 
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
         x = self.fc(x)
 
         return x
+
+
+def se_resnext_18(**kwargs):
+    """Constructs a ResNeXt-18 model.
+    """
+    model = SE_ResNeXt(BasicBlock, [2, 2, 2, 2], **kwargs)
+    return model
+
+
 
 def se_resnext_50(**kwargs):
     """Constructs a ResNeXt-50 model.
